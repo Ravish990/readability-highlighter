@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manuscript Readability Highlighter</title>
+    <script src="https://tailwindcss.com"></script>
+    <style>
+        .highlight-hard { background-color: #fef08a; text-decoration: underline decoration-red-400 decoration-2; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen p-6">
+    <div class="max-w-4xl mx-auto space-y-6">
+        <header class="border-b pb-4">
+            <h1 class="text-3xl font-bold text-slate-900">📚 Manuscript Readability Highlighter</h1>
+            <p class="text-slate-500">Paste your chapter to check metrics and isolate your 5 hardest sentences.</p>
+        </header>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="bg-white p-4 rounded-xl shadow-sm border text-center">
+                <span class="text-sm font-semibold text-slate-400 block uppercase">Flesch Reading Ease</span>
+                <span id="score" class="text-4xl font-extrabold text-indigo-600">100</span>
+                <span id="grade" class="text-xs text-slate-500 block mt-1">Very Easy</span>
+            </div>
+            <div class="bg-white p-4 rounded-xl shadow-sm border text-center">
+                <span class="text-sm font-semibold text-slate-400 block uppercase">Word Count</span>
+                <span id="wordCount" class="text-4xl font-extrabold text-slate-700">0</span>
+            </div>
+            <div class="bg-white p-4 rounded-xl shadow-sm border text-center">
+                <span class="text-sm font-semibold text-slate-400 block uppercase">Hard Sentences</span>
+                <span id="hardCount" class="text-4xl font-extrabold text-amber-500">0 / 5</span>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="flex flex-col space-y-2">
+                <label class="font-medium text-slate-700">Paste Your Chapter Content Here:</label>
+                <textarea id="editor" class="w-full h-80 p-4 border rounded-xl shadow-inner focus:ring-2 focus:ring-indigo-500 focus:outline-none" placeholder="Start typing or paste your text..."></textarea>
+            </div>
+            <div class="flex flex-col space-y-2">
+                <label class="font-medium text-slate-700">Analyzed Output (Hard Sentences Highlighted):</label>
+                <div id="preview" class="w-full h-80 p-4 border rounded-xl bg-white overflow-y-auto whitespace-pre-wrap leading-relaxed shadow-sm"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const editor = document.getElementById('editor');
+        const preview = document.getElementById('preview');
+        const scoreEl = document.getElementById('score');
+        const gradeEl = document.getElementById('grade');
+        const wordCountEl = document.getElementById('wordCount');
+        const hardCountEl = document.getElementById('hardCount');
+
+        function countSyllables(word) {
+            word = word.toLowerCase().replace(/[^a-z]/g, '');
+            if(word.length <= 3) return 1;
+            word = word.replace(/(?:[^laeiouy]es|ed|[^laeiouy]e)\$/, '');
+            word = word.replace(/^y/, '');
+            const syllables = word.match(/[aeiouy]{1,2}/g);
+            return syllables ? syllables.length : 1;
+        }
+
+        function analyzeText() {
+            const text = editor.value.trim();
+            if (!text) {
+                preview.innerHTML = "<p class='text-slate-400 italic'>Analysis will appear here...</p>";
+                scoreEl.innerText = "100"; gradeEl.innerText = "Clean Canvas";
+                wordCountEl.innerText = "0"; hardCountEl.innerText = "0 / 5";
+                return;
+            }
+
+            // Split sentences avoiding common shorthand periods
+            const sentenceRegex = /[^.!?]+[.!?]+(\s|\$)/g;
+            let sentences = text.match(sentenceRegex) || [text];
+            
+            let totalWords = 0;
+            let totalSyllables = 0;
+            let sentenceData = [];
+
+            sentences.forEach((rawSentence, index) => {
+                const words = rawSentence.trim().match(/[a-zA-Z']+/g) || [];
+                if (words.length === 0) return;
+
+                let sentenceSyllables = 0;
+                words.forEach(w => sentenceSyllables += countSyllables(w));
+
+                totalWords += words.length;
+                totalSyllables += sentenceSyllables;
+
+                // Algorithm score logic: weighting sentence length and syllable density
+                let complexityScore = words.length * 1.5 + sentenceSyllables;
+
+                sentenceData.push({
+                    index: index,
+                    text: rawSentence,
+                    wordCount: words.length,
+                    score: complexityScore
+                });
+            });
+
+            wordCountEl.innerText = totalWords;
+
+            // Sort to find top 5 hardest sentences
+            const hardest = [...sentenceData]
+                .sort((a, b) => b.score - a.score)
+                .slice(0, 5)
+                .map(s => s.index);
+
+            hardCountEl.innerText = `${Math.min(5, sentenceData.length)} / 5`;
+
+            // Calculate overall Flesch Reading Ease score
+            if (totalWords > 0 && sentenceData.length > 0) {
+                const asl = totalWords / sentenceData.length;
+                const asw = totalSyllables / totalWords;
+                let fre = 206.835 - (1.015 * asl) - (84.6 * asw);
+                fre = Math.max(0, Math.min(100, Math.round(fre)));
+                scoreEl.innerText = fre;
+
+                if(fre > 90) gradeEl.innerText = "Very Easy (5th Grade)";
+                else if(fre > 80) gradeEl.innerText = "Easy (6th Grade)";
+                else if(fre > 70) gradeEl.innerText = "Fairly Easy (7th Grade)";
+                else if(fre > 60) gradeEl.innerText = "Standard (8th-9th Grade)";
+                else if(fre > 50) gradeEl.innerText = "Fairly Difficult (High School)";
+                else if(fre > 30) gradeEl.innerText = "Difficult (College)";
+                else gradeEl.innerText = "Very Confusing (Graduate)";
+            }
+
+            // Render Output Preview with structural visual highlight overlays
+            let outputHTML = "";
+            sentenceData.forEach(s => {
+                if (hardest.includes(s.index)) {
+                    outputHTML += `<span class="highlight-hard" title="Complexity Score: ${Math.round(s.score)}">${s.text}</span>`;
+                } else {
+                    outputHTML += `<span>${s.text}</span>`;
+                }
+            });
+            preview.innerHTML = outputHTML;
+        }
+
+        editor.addEventListener('input', analyzeText);
+    </script>
+</body>
+</html>
