@@ -22,7 +22,7 @@ button.alt{background:transparent;color:var(--mut);border:1px solid var(--bd);ma
 .stat span{color:var(--mut);font-size:.8rem}
 .verdict{font-family:system-ui,sans-serif;margin:0 0 16px}
 .text{background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:14px;white-space:pre-wrap;overflow-wrap:anywhere}
-mark{background:var(--hl);color:inherit;border-radius:3px;padding:1px 0}
+mark{color:inherit;border-radius:3px;padding:1px 0}mark.e{background:rgba(80,180,90,.28)}mark.m{background:rgba(240,190,50,.38)}mark.h{background:rgba(225,90,90,.3)}.lg{font:.85rem system-ui,sans-serif;color:var(--mut);margin:0 0 8px}.lg mark{padding:2px 8px;margin-right:6px}
 mark sup{font:700 .7rem system-ui,sans-serif;color:var(--ac);margin-left:2px}
 ol{padding-left:20px}
 li{margin-bottom:10px}
@@ -40,7 +40,8 @@ h2{font-size:1.15rem;margin:24px 0 8px}
 <section id="out" hidden>
 <div class="grid" id="stats"></div>
 <p class="verdict" id="verdict"></p>
-<h2>Your text, hardest sentences marked</h2>
+<h2>Your text, colour-coded by difficulty</h2>
+<p class="lg"><mark class="e">Easy</mark><mark class="m">Medium</mark><mark class="h">Hard</mark> Numbers 1 to 5 mark the hardest sentences.</p>
 <div class="text" id="marked"></div>
 <h2>The five hardest sentences</h2>
 <ol id="list"></ol>
@@ -90,23 +91,22 @@ function analyze(){
   const ease=206.835-1.015*(W/S)-84.6*(Y/W);
   const grade=0.39*(W/S)+11.8*(Y/W)-15.59;
   const top=spans.filter(x=>x.n>=4).sort((x,y)=>y.score-x.score).slice(0,5);
-  const ranks=new Map(top.map((x,i)=>[x.a,i+1]));
+  const ranks=new Map(top.map((x,i)=>[x,i+1]).filter(([x])=>x.score>=9).map(([x,r])=>[x.a,r]));
   let html="",pos=0;
   for(const x of spans.slice().sort((p,q)=>p.a-q.a)){
-    if(ranks.has(x.a)){
-      let a=x.a;while(/\s/.test(t[a]))a++;
-      let b=x.b;while(b>a&&/\s/.test(t[b-1]))b--;
-      html+=esc(t.slice(pos,a))+'<mark>'+esc(t.slice(a,b))+'<sup>'+ranks.get(x.a)+'</sup></mark>';
-      pos=b;
-    }
+    let a=x.a;while(/\s/.test(t[a]))a++;
+    let b=x.b;while(b>a&&/\s/.test(t[b-1]))b--;
+    const c=x.score>=12?"h":x.score>=9?"m":"e";
+    html+=esc(t.slice(pos,a))+'<mark class="'+c+'">'+esc(t.slice(a,b))+(ranks.has(x.a)?'<sup>'+ranks.get(x.a)+'</sup>':'')+'</mark>';
+    pos=b;
   }
   html+=esc(t.slice(pos));
   const band=ease>=80?"Easy. Fast, light reading.":ease>=60?"Plain English. Suits most general fiction and nonfiction.":ease>=50?"Fairly difficult. Fine for literary or academic work.":"Difficult. Expect readers to slow down.";
   $("stats").innerHTML=[[ease.toFixed(0),"Flesch Reading Ease"],[grade.toFixed(1),"Grade level"],[W.toLocaleString(),"Words"],[S.toLocaleString(),"Sentences"],[(W/S).toFixed(1),"Avg words / sentence"]]
     .map(([v,l])=>'<div class="stat"><b>'+v+'</b><span>'+l+'</span></div>').join("");
-  $("verdict").textContent=band;
+  $("verdict").textContent=band+(ranks.size?"":" None of your sentences are hard.");
   $("marked").innerHTML=html;
-  $("list").innerHTML=top.map(x=>'<li>'+esc(x.s)+'<small>'+x.n+' words · grade '+x.score.toFixed(1)+'</small></li>').join("")||"<li>No sentences long enough to rank.</li>";
+  $("list").innerHTML=top.map(x=>'<li>'+esc(x.s)+'<small>'+x.n+' words · grade '+x.score.toFixed(1)+' · '+(x.score>=12?'Hard':x.score>=9?'Moderate':'Easy')+'</small></li>').join("")||"<li>No sentences long enough to rank.</li>";
   $("out").hidden=false;
   $("out").scrollIntoView({behavior:"smooth"});
 }
